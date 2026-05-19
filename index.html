@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>비디오콘 명함 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..900&display=swap');
+@font-face {
+  font-family: 'Pretendard';
+  src: url('./PretendardVariable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #efece7;
+  --surface: #fff;
+  --border: rgba(0,0,0,0.09);
+  --text: #1a1a1a;
+  --muted: #888;
+  --radius: 12px;
+  --f-pre: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  --f-rob: 'Roboto Flex', 'Pretendard', sans-serif;
+}
+
+/* 화면 전체에서 좌우 스크롤/초과 너비 방지 */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* body: safe-area 고려한 명확한 좌/우 패딩 */
+body {
+  font-family: var(--f-pre);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  /* 상/하 패딩은 유지, 좌/우는 safe-area와 최소값 병행 */
+  padding-block: 36px 80px;
+  padding-inline-start: max(16px, env(safe-area-inset-left));
+  padding-inline-end:   max(16px, env(safe-area-inset-right));
+  box-sizing: border-box;
+}
+
+header {
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto 28px; /* 중앙 정렬로 복구 (위쪽 0, 좌우 auto, 아래 28px) */
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.logo-mark {
+  width: 42px; height: 42px; background: #0d0d0d;
+  border-radius: 10px; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0; padding: 9px;
+}
+.logo-mark svg { width: 100%; height: auto; }
+header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.main {
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  padding-inline: 0;
+  box-sizing: border-box;
+  display: grid; grid-template-columns: 310px 1fr;
+  gap: 18px; align-items: start;
+}
+
+.form-card {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 24px 20px;
+}
+.section-label {
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 16px;
+}
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+.field input {
+  width: 100%; height: 38px; padding: 0 11px;
+  border: 1px solid #e2dfd9; border-radius: 7px;
+  font-size: 13.5px; font-family: var(--f-pre);
+  color: var(--text); background: #faf9f7; outline: none;
+  transition: border-color 0.15s;
+}
+.field input:focus { border-color: #0d0d0d; background: #fff; }
+.field input::placeholder { color: #ccc; }
+.divider { height: 1px; background: #f0ede8; margin: 16px 0; }
+.fixed-label { font-size: 10.5px; font-weight: 500; color: var(--muted); margin-bottom: 7px; }
+.fixed-info {
+  background: #f8f7f4; border-radius: 7px; padding: 10px 12px;
+  font-size: 11px; color: #666; line-height: 1.85; border: 1px solid #eae8e3;
+}
+.btn-row { display: flex; gap: 8px; margin-top: 20px; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid #e2dfd9;
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--f-pre);
+  cursor: pointer;
+  transition: all 0.12s;
+  color: var(--text);
+
+  /* 콘텐츠 크기에 따라 너비 결정 */
+  width: auto;
+  flex: none;        /* 부모 flex 레이아웃에서 고정 비율 제거 */
+  min-width: 0;
+  white-space: nowrap;
+}
+.btn:hover { background: #f5f3ef; }
+.btn:active { transform: scale(0.98); }
+.btn.primary {
+  background: #0d0d0d;
+  color: #fff;
+  border-color: #0d0d0d;
+
+  /* PDF 버튼만 컨테이너 남은 공간을 채우도록 */
+  flex: 1 1 0%;    /* 늘어나고(shrink) 최소 기준은 0%로 설정 */
+  min-width: 0;    /* overflow 방지 */
+}
+.btn.primary:hover { background: #222; }
+
+.preview-card {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 24px 20px;
+}
+.preview-bg {
+  background: #d9d5ce; border-radius: 9px; padding: 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.preview-sublabel {
+  font-size: 10px; color: #999;
+  letter-spacing: 0.06em; text-transform: uppercase; align-self: flex-start;
+}
+
+/* ═══════════════════════════════════════
+   명함 카드 — AI 원본 파일 실측값 기반
+   카드: 92 × 52 mm
+   모든 좌표: AI 파일에서 직접 추출한 mm값 → %
+═══════════════════════════════════════ */
+.bc-wrap {
+  width: 100%; position: relative;
+}
+.bc-wrap::before {
+  content: ''; display: block;
+  padding-top: calc(52 / 92 * 100%);
+}
+.bc {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: #0d0d0d; border-radius: 3px; overflow: hidden;
+}
+
+/* 로고: 벡터 경로 상 위치 — 우상단
+   원본 PDF 벡터 분석: x≈71.8~83.4mm, y≈8.4~14.1mm */
+.bc-logo {
+  position: absolute;
+  left: 78.0%; top: 14.8%;
+  width: 12.5%;
+}
+.bc-logo svg { width: 100%; height: auto; display: block; }
+
+/* 이름: left=9.34% top=14.87%
+   원본: 8.59mm, 7.73mm / 9pt Pretendard
+   한글+영문 띄어쓰기 없이 붙여쓰기 (원본 그대로) */
+.bc-name {
+  position: absolute;
+  left: 9.34%; top: 14.87%;
+  white-space: nowrap; line-height: 1;
+  font-family: var(--f-pre); color: #F5F2F1; letter-spacing: -0.01em;
+  display: flex; align-items: baseline; gap: 0.3em;
+}
+.bc-name-kr { font-weight: 700; }
+.bc-name-en { font-weight: 400; letter-spacing: -0.025em; }
+
+/* 직급: left=9.33% top=22.46%
+   원본: 8.58mm, 11.68mm / 7pt RobotoFlex */
+.bc-jobtitle {
+  position: absolute;
+  left: 9.33%; top: 22.46%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #C9CACA; white-space: nowrap; letter-spacing: -0.025em;
+}
+
+/* M 라벨: left=9.09% top=68.19% */
+.bc-m-label {
+  position: absolute;
+  left: 9.09%; top: 68.19%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; letter-spacing: -0.025em;
+}
+
+/* 전화: left=13.04% top=68.19% */
+.bc-phone {
+  position: absolute;
+  left: 13.04%; top: 68.19%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+
+/* E 라벨: left=9.09% top=77.37% */
+.bc-e-label {
+  position: absolute;
+  left: 9.09%; top: 77.37%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; letter-spacing: -0.025em;
+}
+
+/* 이메일: left=12.95% top=76.92% */
+.bc-email {
+  position: absolute;
+  left: 12.95%; top: 76.92%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+
+/* 주소 블록 — right edge 83.73mm 기준 우측 정렬 (right: 8.99%)
+   top 좌표는 원본 AI 실측값 */
+.bc-addr-ko1 {
+  position: absolute; right: 8.99%; top: 48.40%;
+  font-family: var(--f-pre); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+.bc-addr-ko2 {
+  position: absolute; right: 8.99%; top: 54.52%;
+  font-family: var(--f-pre); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+.bc-addr-en1 {
+  position: absolute; right: 8.99%; top: 62.54%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+.bc-addr-en2 {
+  position: absolute; right: 8.99%; top: 68.63%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+.bc-addr-web {
+  position: absolute; right: 8.99%; top: 77.37%;
+  font-family: var(--f-rob); font-weight: 400;
+  color: #F5F2F1; white-space: nowrap; letter-spacing: -0.025em;
+}
+
+
+
+/* ── 노션 불러오기 ── */
+.load-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  align-items: center;
+  min-width: 0; /* 자식의 최소 너비 제한 -> overflow 방지 */
+  box-sizing: border-box;
+}
+
+/* Select은 컨테이너에서 버튼 공간을 제외한 나머지 전체를 차지하도록 고정.
+   핵심: flex-basis를 0으로 주어 긴 텍스트가 부모를 밀어내지 않게 함 */
+.load-row select {
+  flex: 1 1 0;          /* grow, shrink, basis(0) -> 부모 너비에 따라 축소/확장 */
+  min-width: 0;         /* 매우 중요: flex 아이템 축소 허용 */
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid #e2dfd9;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-family: var(--f-pre);
+  color: var(--text);
+  background: #faf9f7;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+
+  /* 긴 텍스트는 줄임표로 처리하여 버튼 영역 침범 방지 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* 버튼은 고정 너비로 지정하여 select가 항상 남은 공간만 사용하게 함 */
+.load-row .load-btn {
+  flex: 0 0 44px;    /* 고정 폭 */
+  width: 44px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid #e2dfd9;
+  background: #fff;
+  cursor: pointer;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* 포커스/비활성 상태 유지 */
+.load-row select:focus { border-color: #0d0d0d; }
+.load-row select:disabled { color: #bbb; cursor: default; }
+.load-row .load-btn:hover { background: #f5f3ef; }
+.load-row .load-btn:active { transform: scale(0.98); }
+.load-divider {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px; color: #bbb; font-size: 11px;
+}
+.load-divider::before, .load-divider::after {
+  content: ''; flex: 1; height: 1px; background: #f0ede8;
+}
+
+/* ── 전화번호 입력 (국가코드 + 번호) ── */
+.phone-wrap {
+  display: flex; gap: 6px; align-items: center;
+}
+.phone-wrap select {
+  height: 38px; padding: 0 6px 0 8px;
+  border: 1px solid #e2dfd9; border-radius: 7px;
+  font-size: 12.5px; font-family: var(--f-pre);
+  color: var(--text); background: #faf9f7;
+  outline: none; cursor: pointer;
+  transition: border-color 0.15s;
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  padding-right: 24px;
+}
+.phone-wrap select:focus { border-color: #0d0d0d; background-color: #fff; }
+.phone-wrap input {
+  flex: 1;
+  height: 38px;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid #e2dfd9;
+  border-radius: 7px;
+  font-size: 13.5px;
+  font-family: var(--f-pre);
+  color: var(--text);
+  background: #faf9f7;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 38px;          /* 텍스트 수직 정렬 보정 */
+  -webkit-appearance: none;
+  appearance: none;
+  vertical-align: middle;
+}
+
+/* 셀렉트와 일관되게 맞추기 (추가 보정) */
+.phone-wrap select {
+  height: 38px;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ── 하단 안내 ── */
+.print-guide {
+  margin-top: 16px; padding: 13px 15px;
+  background: #f8f7f4; border-radius: 8px; border: 1px solid #eae8e3;
+}
+.print-guide h3 {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 9px;
+}
+.guide-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.chip {
+  background: #fff; border: 1px solid #e2dfd9;
+  border-radius: 5px; padding: 3px 9px; font-size: 11px; color: #444;
+}
+.chip strong { font-weight: 600; color: #111; }
+.guide-note { font-size: 11px; color: #999; line-height: 1.7; }
+.how-to {
+  margin-top: 12px; padding: 13px 15px;
+  background: #f0f6ff; border-radius: 8px; border: 1px solid #d4e5ff;
+}
+.how-to h3 {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: #3a6abf; margin-bottom: 9px;
+}
+.steps { display: flex; flex-direction: column; gap: 6px; }
+.step { display: flex; gap: 9px; align-items: flex-start; font-size: 11.5px; color: #444; line-height: 1.5; }
+.step-num {
+  width: 17px; height: 17px; background: #2563eb; color: #fff;
+  border-radius: 50%; font-size: 9.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+
+.toast {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(14px);
+  background: #0d0d0d; color: #fff; padding: 10px 18px;
+  border-radius: 7px; font-size: 12.5px; font-weight: 500;
+  opacity: 0; transition: all 0.2s;
+  pointer-events: none; z-index: 100; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+
+/* ===== 반응형 규칙 ===== */
+@media (max-width: 940px) {
+  header { gap: 10px; }
+  header .logo-mark { width: 38px; height: 38px; padding: 8px; }
+  header h1 { font-size: 15px; }
+  header p  { font-size: 11px; }
+
+  .main {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  /* 변경: 모바일에서도 한 줄 유지 */
+  .load-row {
+    display: flex;
+    flex-direction: row; /* 한 줄로 유지 */
+    gap: 8px;
+    align-items: center;
+  }
+  .load-row select {
+    flex: 1;
+    min-width: 0; /* overflow 방지 */
+    width: auto;
+  }
+  .load-row .load-btn {
+    flex: none;
+    white-space: nowrap;
+  }
+  /* 기존 선택 너비 강제 규칙 제거/대체 */
+  /* .load-row select { width: 100%; } 삭제 */
+  .load-row select:disabled { color: #bbb; cursor: default; }
+  .load-row select:focus { border-color: #0d0d0d; }
+
+  .preview-bg { padding: 16px; }
+}
+
+/* 작은 화면에서 버튼 스택 및 PDF 버튼 전체 너비 */
+@media (max-width: 740px) {
+  body {
+    padding-block: 20px 60px;
+    padding-inline-start: max(12px, env(safe-area-inset-left));
+    padding-inline-end:   max(12px, env(safe-area-inset-right));
+  }
+  .btn-row {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .btn {
+    width: 100%;
+    flex: none;
+    justify-content: center;
+  }
+  /* PDF 버튼은 강조되어 전체 넓이 유지 */
+  .btn.primary {
+    width: 100%;
+    flex: none;
+  }
+
+  /* 입력 필드/전화박스도 좁은 화면에 맞게 처리 */
+  .phone-wrap { flex-direction: column; align-items: stretch; gap: 8px; }
+  .phone-wrap select, .phone-wrap input { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89.02 43.39">
+      <path fill="#fff" d="M67.32,0c-6.47,0-12.28,2.84-16.26,7.33l-20.24,22.54c-.47.52-.97,1.02-1.51,1.45-2.09,1.66-4.74,2.64-7.61,2.64-6.78,0-12.29-5.5-12.29-12.28s5.5-12.28,12.28-12.28c5.33,0,9.85,3.4,11.54,8.15l6.65-7.67C36.03,3.94,29.32,0,21.69,0,9.71,0,0,9.71,0,21.69s9.72,21.69,21.7,21.69c6.8,0,12.86-3.12,16.85-8.03.17-.21.35-.42.53-.63l7.16-7.95c2.29,9.53,10.86,16.61,21.08,16.61,11.98,0,21.69-9.71,21.69-21.69S79.3,0,67.32,0ZM67.32,33.97c-6.78,0-12.27-5.5-12.27-12.28s5.5-12.27,12.27-12.27,12.28,5.49,12.28,12.27-5.5,12.28-12.28,12.28Z"/>
+    </svg>
+  </div>
+  <div>
+    <h1>비디오콘 명함 생성기</h1>
+    <p>신규 직원 정보 입력 → 미리보기 확인 → PDF 저장 → 인쇄소 제출</p>
+  </div>
+</header>
+
+<div class="main">
+
+  <div class="form-card">
+    <div class="section-label">직원 정보 입력</div>
+
+    <!-- 노션에서 불러오기 -->
+    <div class="load-row">
+      <select id="notionList" disabled>
+        <option value="">— 노션 DB에서 불러오기 —</option>
+      </select>
+      <button class="load-btn" onclick="loadFromNotion()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+          
+      </button>
+    </div>
+    <div class="load-divider">또는 직접 입력</div>
+
+    <div class="field">
+      <label>이름 — 한글</label>
+      <input type="text" id="nameKr" placeholder="홍길동" oninput="sync()">
+    </div>
+    <div class="field">
+      <label>이름 — 영문</label>
+      <input type="text" id="nameEn" placeholder="Hong GilDong" oninput="sync()">
+    </div>
+    <div class="field">
+      <label>직급 / 직책</label>
+      <input type="text" id="jobTitle" placeholder="Director" oninput="sync()">
+    </div>
+    <div class="field">
+      <label>휴대전화</label>
+      <div class="phone-wrap">
+        <select id="countryCode" onchange="sync()">
+          <option value="+82" selected>🇰🇷 +82</option>
+          <option value="+1">🇺🇸 +1</option>
+          <option value="+44">🇬🇧 +44</option>
+          <option value="+81">🇯🇵 +81</option>
+          <option value="+86">🇨🇳 +86</option>
+          <option value="+33">🇫🇷 +33</option>
+          <option value="+49">🇩🇪 +49</option>
+          <option value="+61">🇦🇺 +61</option>
+          <option value="+65">🇸🇬 +65</option>
+          <option value="+66">🇹🇭 +66</option>
+          <option value="+84">🇻🇳 +84</option>
+          <option value="+91">🇮🇳 +91</option>
+        </select>
+        <input type="text" id="phoneNum" placeholder="010-0000-0000" oninput="formatPhone(this); sync()" inputmode="numeric" maxlength="13">
+      </div>
+    </div>
+    <div class="field">
+      <label>이메일</label>
+      <input type="text" id="email" placeholder="name@videocon.io" oninput="sync()">
+    </div>
+    <div class="divider"></div>
+    <div class="fixed-label">고정 정보 (모든 직원 동일)</div>
+    <div class="fixed-info">
+      (주)슬레이트미디어<br>
+      서울시 중구 청계천로 40, 12층<br>
+      40, Cheonggyecheon-ro, Jung-gu<br>
+      Seoul, 04521, Rep. of KOREA<br>
+      videocon.io
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="resetAll()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        초기화
+      </button>
+      <button class="btn" onclick="submitToNotion()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        제출
+      </button>
+      <button class="btn primary" onclick="printCard()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      PDF 받기
+      </button>
+    </div>
+  </div>
+
+  <div class="preview-card">
+    <div class="section-label">실시간 미리보기</div>
+    <div class="preview-bg">
+      <div class="preview-sublabel">명함 뒷면 — 정보면</div>
+
+      <div class="bc-wrap">
+        <div class="bc" id="bc">
+
+          <!-- 로고 -->
+          <div class="bc-logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89.02 43.39">
+              <!-- 필요하면 여기에 로고 경로(path)를 넣으세요 -->
+            </svg>
+          </div>
+
+          <!-- 이름: 한글+영문 붙여쓰기 (원본 형식) -->
+          <div class="bc-name">
+            <span class="bc-name-kr" id="p-nameKr">홍길동</span>
+            <span class="bc-name-en" id="p-nameEn">Hong GilDong</span>
+          </div>
+
+          <!-- 직급 -->
+          <div class="bc-jobtitle" id="p-jobTitle">Director</div>
+
+          <!-- M + 전화 -->
+          <div class="bc-m-label">M</div>
+          <div class="bc-phone" id="p-phone">+82 010-0000-0000</div>
+
+          <!-- E + 이메일 -->
+          <div class="bc-e-label">E</div>
+          <div class="bc-email" id="p-email">name@videocon.io</div>
+
+          <!-- 주소 — 원본 AI 좌표 그대로 -->
+          <div class="bc-addr-ko1">(주)슬레이트미디어</div>
+          <div class="bc-addr-ko2">서울시 중구 청계천로 40, 12층</div>
+          <div class="bc-addr-en1">40, Cheonggyecheon-ro, Jung-gu</div>
+          <div class="bc-addr-en2">Seoul, 04521, Rep. of KOREA</div>
+          <div class="bc-addr-web">videocon.io</div>
+
+        </div>
+      </div>
+
+      <div class="preview-sublabel" style="align-self:flex-end; font-size:9px; color:#bbb;">
+        재단 후 90 × 50 mm
+      </div>
+    </div>
+
+    <div class="print-guide">
+      <h3>인쇄소 제출 규격</h3>
+      <div class="guide-chips">
+        <div class="chip"><strong>작업</strong> 92 × 52 mm</div>
+        <div class="chip"><strong>재단</strong> 90 × 50 mm</div>
+        <div class="chip"><strong>블리드</strong> 각 1 mm</div>
+        <div class="chip"><strong>해상도</strong> 300 DPI</div>
+        <div class="chip"><strong>색상</strong> CMYK</div>
+      </div>
+      <div class="guide-note">
+        ※ 앞면(은박 로고면)은 기존 원본 파일을 그대로 사용하세요.<br>
+        ※ 이 파일은 뒷면(정보면) 전용입니다.
+      </div>
+    </div>
+
+    <div class="how-to">
+      <h3>PDF 저장 방법</h3>
+      <div class="steps">
+        <div class="step"><div class="step-num">1</div><span>정보 입력 후 <strong>PDF 다운로드</strong> 클릭</span></div>
+        <div class="step"><div class="step-num">2</div><span>대상(프린터)을 <strong>PDF로 저장</strong> 선택</span></div>
+        <div class="step"><div class="step-num">3</div><span>용지 크기 → <strong>사용자 정의: 92 × 52 mm</strong>, 여백 → <strong>없음</strong></span></div>
+        <div class="step"><div class="step-num">4</div><span>저장된 PDF를 앞면 파일과 함께 인쇄소 제출</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // 카드 너비 기반 폰트 크기 동적 계산
+  // 원본 AI 폰트 크기(pt) → mm 환산 → 카드 비율로 px 계산
+  // 9pt = 3.175mm, 7pt = 2.470mm, 7.5pt = 2.646mm
+  function scaleFonts() {
+    const bc = document.getElementById('bc');
+    const w = bc.offsetWidth;
+    if (!w) return;
+    const s = w / 92; // 1mm당 px
+
+    const set = (sel, mm) =>
+      bc.querySelectorAll(sel).forEach(el => el.style.fontSize = (mm * s) + 'px');
+
+    set('.bc-name-kr, .bc-name-en',                      3.175); // 9pt
+    set('.bc-jobtitle',                                   2.470); // 7pt
+    set('.bc-m-label, .bc-e-label',                       2.646); // 7.5pt
+    set('.bc-phone, .bc-email',                           2.646); // 7.5pt
+    set('.bc-addr-ko1, .bc-addr-ko2',                     2.646); // 7.5pt
+    set('.bc-addr-en1, .bc-addr-en2, .bc-addr-web',       2.646); // 7.5pt
+  }
+
+  new ResizeObserver(scaleFonts).observe(document.getElementById('bc'));
+  window.addEventListener('load', scaleFonts);
+
+  function val(id) { return document.getElementById(id).value.trim(); }
+
+
+  // ── 노션 DB 목록 불러오기 ──
+  async function loadFromNotion() {
+    const sel = document.getElementById('notionList');
+    sel.disabled = true;
+    sel.innerHTML = '<option>불러오는 중...</option>';
+    showToast('노션 목록 불러오는 중...');
+
+    try {
+      const res  = await fetch(GAS_URL + '?action=list');
+      const data = await res.json();
+
+      if (!data.ok) {
+        showToast('목록 불러오기 실패');
+        sel.innerHTML = '<option value="">— 실패, 다시 시도 —</option>';
+        return;
+      }
+
+      sel.innerHTML = '<option value="">— 항목 선택 —</option>';
+      data.items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify(item);
+        opt.textContent = item.nameKr + ' ' + item.nameEn + ' (' + item.jobTitle + ')';
+        sel.appendChild(opt);
+      });
+      sel.disabled = false;
+      sel.onchange = () => {
+        if (!sel.value) return;
+        const item = JSON.parse(sel.value);
+        // 폼에 자동 입력
+        document.getElementById('nameKr').value  = item.nameKr   || '';
+        document.getElementById('nameEn').value  = item.nameEn   || '';
+        document.getElementById('jobTitle').value = item.jobTitle || '';
+        document.getElementById('email').value   = item.email    || '';
+        // 전화번호 파싱 (국가코드 + 번호 분리)
+        const phone = item.phone || '';
+        const ccMatch = phone.match(/^(\+\d+)\s(.+)$/);
+        if (ccMatch) {
+          const ccSel = document.getElementById('countryCode');
+          const matched = [...ccSel.options].find(o => o.value === ccMatch[1]);
+          if (matched) ccSel.value = ccMatch[1];
+          document.getElementById('phoneNum').value = ccMatch[2];
+        } else {
+          document.getElementById('phoneNum').value = phone;
+        }
+        sync();
+        showToast('✓ 불러오기 완료 — 수정 후 PDF 다운로드하세요');
+      };
+      showToast('✓ ' + data.items.length + '명 불러왔어요');
+    } catch (e) {
+      console.error(e);
+      showToast('네트워크 오류');
+      sel.innerHTML = '<option value="">— 실패, 다시 시도 —</option>';
+    }
+  }
+
+  // 전화번호 자동 포맷: 숫자만 입력 → 대시 자동 삽입
+  // 한국: 010-XXXX-XXXX / 02-XXXX-XXXX / 국제: 숫자 그대로
+  function formatPhone(input) {
+    try {
+      const cc = document.getElementById('countryCode').value;
+      const raw = input.value || '';
+      const selStart = input.selectionStart || 0;
+
+      // 숫자만 추출
+      let digits = raw.replace(/\D/g, '');
+
+      // 몇 개의 숫자가 커서 앞에 있는지 계산
+      const digitsBeforeCursor = raw.slice(0, selStart).replace(/\D/g, '').length;
+
+      let formatted = '';
+
+      if (cc === '+82') {
+        if (digits.startsWith('02')) {
+          // 02-XXXX-XXXX 또는 02-XXX-XXXX
+          const a = digits.slice(0,2);
+          const b = digits.slice(2,6); // 다음 최대 4자리
+          const c = digits.slice(6,10); // 이후 최대 4자리
+          if (!a) formatted = '';
+          else if (!b) formatted = a;
+          else if (!c) formatted = `${a}-${b}`;
+          else formatted = `${a}-${b}-${c}`;
+        } else {
+          // 010 등 3자리 국번: 3-4-4
+          const a = digits.slice(0,3);
+          const b = digits.slice(3,7);
+          const c = digits.slice(7,11);
+          if (!a) formatted = '';
+          else if (!b) formatted = a;
+          else if (!c) formatted = `${a}-${b}`;
+          else formatted = `${a}-${b}-${c}`;
+        }
+      } else {
+        // 해외: 숫자만 표시
+        formatted = digits;
+      }
+
+      // 커서 위치 보정: digitsBeforeCursor 번째 숫자 뒤의 인덱스 찾기
+      let newPos = 0, count = 0;
+      while (newPos < formatted.length && count < digitsBeforeCursor) {
+        if (/\d/.test(formatted[newPos])) count++;
+        newPos++;
+      }
+
+      input.value = formatted;
+      // 비동기적으로 선택 범위 설정하여 브라우저 입력 루프와 충돌 방지
+      setTimeout(() => {
+        input.setSelectionRange(newPos, newPos);
+      }, 0);
+    } catch (e) {
+      // 예외 시 원래 동작 (최소한 숫자만 남김)
+      input.value = (input.value || '').replace(/\D/g, '');
+    }
+  }
+
+  function sync() {
+    document.getElementById('p-nameKr').textContent  = val('nameKr') || '홍길동';
+    document.getElementById('p-nameEn').textContent  = val('nameEn') || 'Hong GilDong';
+    document.getElementById('p-jobTitle').textContent = val('jobTitle') || 'Director';
+    const cc = document.getElementById('countryCode').value;
+    const num = document.getElementById('phoneNum').value.trim();
+    document.getElementById('p-phone').textContent = num ? cc + ' ' + num : '+82 010-0000-0000';
+    document.getElementById('p-email').textContent    = val('email')    || 'name@videocon.io';
+  }
+
+  function resetAll() {
+    ['nameKr','nameEn','jobTitle','phoneNum','email'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('countryCode').value = '+82';
+    sync();
+  }
+
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbyZxZVJtoub_mobpTOjCGxVJrISgKKGwvKrD7s_eZOIlZAWVUj4QUO0YHR60LOytZ2jIQ/exec';
+
+  async function submitToNotion() {
+    if (['nameKr','nameEn','jobTitle','email'].some(id => !val(id)) || !document.getElementById('phoneNum').value.trim()) {
+      showToast('모든 항목을 입력해주세요');
+      return;
+    }
+
+    showToast('노션에 제출 중...');
+
+    const cc  = document.getElementById('countryCode').value;
+    const num = document.getElementById('phoneNum').value.trim();
+
+    // GET 방식으로 전송 (CORS 우회)
+    const params = new URLSearchParams({
+      nameKr:   val('nameKr'),
+      nameEn:   val('nameEn'),
+      jobTitle: val('jobTitle'),
+      phone:    cc + ' ' + num,
+      email:    val('email'),
+    });
+
+    try {
+      const res = await fetch(GAS_URL + '?' + params.toString());
+      const result = await res.json();
+      if (result.ok) {
+        showToast('✓ 노션에 제출 완료!');
+      } else {
+        console.error(result);
+        showToast('제출 실패: ' + (result.error || '알 수 없는 오류'));
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('네트워크 오류가 발생했어요');
+    }
+  }
+
+  async function printCard() {
+    if (['nameKr','nameEn','jobTitle','email'].some(id => !val(id)) || !document.getElementById('phoneNum').value.trim()) {
+      showToast('모든 항목을 입력해주세요');
+      return;
+    }
+
+    showToast('PDF 생성 중...');
+
+    const bc = document.getElementById('bc');
+    const SCALE = 4; // 고배율 캡처 (≈300dpi)
+
+    try {
+      const canvas = await html2canvas(bc, {
+        scale: SCALE,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#0d0d0d',
+        logging: false,
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: [92, 52],
+        compress: true,
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      pdf.addImage(imgData, 'JPEG', 0, 0, 92, 52);
+
+      const nameKr = val('nameKr');
+      const jobTitle = val('jobTitle');
+      pdf.save(`명함_${nameKr}_${jobTitle}.pdf`);
+
+      showToast('다운로드 완료!');
+    } catch (e) {
+      console.error(e);
+      showToast('오류가 발생했어요. 다시 시도해주세요.');
+    }
+  }
+</script>
+</body>
+</html>
